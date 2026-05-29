@@ -140,7 +140,7 @@ def test_scatterer_extinction_wf_native_grid_polarized():
         )
 
         atmosphere["strat_aerosol"] = sk.test_util.scenarios.test_aerosol_constituent(
-            altitude_grid, True
+            altitude_grid, "extinction"
         )
 
         engine = sk.Engine(scen["config"], scen["geometry"], scen["viewing_geo"])

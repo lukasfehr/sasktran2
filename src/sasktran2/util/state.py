@@ -20,6 +20,7 @@ class EquationOfState:
         self._temperature_k = None
         self._specific_humidity = None
         self._M = molar_mass_dry_air
+        self._Mh = 18.0153e-3
 
     @property
     def pressure_pa(self) -> np.array:
@@ -108,4 +109,24 @@ class EquationOfState:
             "dN_dP": wet["dN_dP"] * (1 - q),
             "dN_dT": wet["dN_dT"] * (1 - q),
             "dN_dsh": -wet["N"],
+        }
+
+    @property
+    def air_molar_mass(self) -> np.array:
+        """
+        Converts specific humidity to moist air molar mass at the grid sample points
+
+        Returns
+        -------
+        dict with keys
+            "M": Molar mass in [kg / mol]
+            "dM_dsh": Derivative of molar mass with respect to spceific humidity in [kg / mol / kg/kg]
+        """
+
+        q = 0 if self.specific_humidity is None else self.specific_humidity
+        M = self._M * self._Mh / ((1 - q) * self._Mh + q * self._M)
+        
+        return {
+            "M": M,
+            "dM_dsh":  (1.0 / self._M - 1.0 / self._Mh) * M**2
         }

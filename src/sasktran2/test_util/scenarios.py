@@ -141,7 +141,7 @@ def default_pure_scattering_atmosphere(
     return atmo
 
 
-def test_aerosol_constituent(altitude_grid: np.array, extinction_space=True):
+def test_aerosol_constituent(altitude_grid: np.array, space="extinction"):
     alts = np.arange(0, 40000, 1000.0)
 
     ext = np.array(
@@ -201,9 +201,22 @@ def test_aerosol_constituent(altitude_grid: np.array, extinction_space=True):
         mie, altitude_grid, ext, ext_wavel, lognormal_median_radius=radius
     )
 
-    if extinction_space:
+    if space == "extinction":
         return const
+    elif space == "number_density":
+        return sk.constituent.NumberDensityScatterer(
+            mie, altitude_grid, const.number_density, lognormal_median_radius=radius
+        )
+    elif space == "mass_mixing_ratio":
+        config = sk.Config()
+        model_geometry = sk.Geometry1D(cos_sza=0., solar_azimuth=0., earth_radius_m=0., altitude_grid_m=altitude_grid)
+        atmosphere = sk.Atmosphere(model_geometry=model_geometry, config=config)
+        sk.climatology.us76.add_us76_standard_atmosphere(atmosphere)
 
-    return sk.constituent.NumberDensityScatterer(
-        mie, altitude_grid, const.number_density, lognormal_median_radius=radius
-    )
+        const0 = sk.constituent.MassMixingRatioScatterer(
+            mie, altitude_grid, np.ones_like(altitude_grid), 1770., sk.mie.distribution.LogNormalDistribution(), median_radius=radius, mode_width=1.6
+        )
+        const0._update_numberdensity(atmosphere)
+        return sk.constituent.MassMixingRatioScatterer(
+            mie, altitude_grid, const.number_density / const0._vertical_deriv_factor, 1770., sk.mie.distribution.LogNormalDistribution(), median_radius=radius, mode_width=1.6
+        )

@@ -6,7 +6,10 @@ import numpy as np
 
 from sasktran2.atmosphere import Atmosphere
 from sasktran2.optical.base import OpticalProperty
+from sasktran2.mie.distribution import ParticleSizeDistribution
 from sasktran2.util.interpolation import linear_interpolating_matrix
+from sasktran2.util.state import EquationOfState
+from sasktran2.constants import AVOGADRO 
 
 from .base import Constituent
 
@@ -276,4 +279,112 @@ class ExtinctionScatterer(NumberDensityScatterer):
 
     def add_to_atmosphere(self, atmo: Atmosphere):
         self._update_numberdensity()
+        super().add_to_atmosphere(atmo)
+
+
+class MassMixingRatioScatterer(NumberDensityScatterer):
+    def __init__(
+        self,
+        optical_property: OpticalProperty,
+        altitudes_m: np.array,
+        mass_mixing_ratio: np.array,
+        density: np.array,
+        distribution: ParticleSizeDistribution, 
+        size_conversion: float = 1e-9,
+        out_of_bounds_mode: str = "zero",
+        **kwargs,
+    ) -> None:
+        """
+        A scattering constituent that is defined by a number density on an altitude grid and an optical property
+
+        Parameters
+        ----------
+        optical_property : OpticalProperty
+            The optical property defining the scattering information
+        altitudes_m : np.array
+            The altitude grid in [m]
+        mass_mixing_ratio : np.array
+            Mass mixing ratio in [kg/kg]
+        density : float
+            Particle density in [kg/m3]
+        distribution : ParticleSizeDistribution
+            Size distribution corresponding to optical_property, used to determine average particle mass.
+        size_conversion : float, optional
+            Factor required to convert units of distribution to m, by default 1e-9 (nm).
+        out_of_bounds_mode : str, optional
+            Interpolation mode outside of the boundaries, "extend" and "zero" are supported, by default "zero"
+        kwargs : dict
+            Additional arguments passed to the optical property
+        """
+        self._mmr = mass_mixing_ratio
+        self._density = density
+        self._distribution = distribution
+        self._size_conversion = size_conversion
+
+        super().__init__(
+            optical_property, altitudes_m, None, out_of_bounds_mode, **kwargs
+        )
+        self._mmr_to_numden_factors = None
+        self._update_numberdensity()
+        self._wf_name = "mass_mixing_ratio"
+
+        for arg in kwargs:
+            if arg not in distribution.args():
+                msg = f"Invalid argument {arg} for particle size distribution"
+                raise ValueError(msg)
+
+    def _update_numberdensity(self, atmo: Atmosphere):
+        # need to interpolate from atmosphere grid to constituent grid
+        # small errors if adjacent constituent nodes span atmosphere grid edges
+        interp_matrix = linear_interpolating_matrix(
+            atmo.model_geometry.altitudes(),
+            self._altitudes_m,
+            "extend"
+        )
+
+        eos = EquationOfState()
+        eos.temperature_k = interp_matrix @ atmo.temperature_k
+        eos.pressure_pa = interp_matrix @ atmo.pressure_pa
+        eos.specific_humidity = interp_matrix @ atmo.specific_humidity
+        N = eos.air_numberdensity
+        M = eos.air_molar_mass
+
+        average_particle_mass = np.zeros_like(self._altitudes_m)
+        d_average_particle_mass = {key: np.zeros_like(average_particle_mass) for key in self._kwargs if key in self._distribution.args()}
+        c = self._density * self._size_conversion**3 * 4. * np.pi / 3.
+        for i in range(len(average_particle_mass)):
+            # could cache duplicate values if this is slow
+            kw = {key: self._kwargs[key][i] for key in d_average_particle_mass}
+            rv = self._distribution.distribution(**kw)
+            average_particle_mass[i] = c * rv.moment(order=3)
+
+            # could use table nodes from MieDatabase here
+            for key in d_average_particle_mass:
+                dkey = max(1e-6, 1e-6 * kw[key])
+                kw[key] += dkey
+                rv = self._distribution.distribution(**kw)
+                d_average_particle_mass[key][i] = (c * rv.moment(order=3) - average_particle_mass[i]) / dkey
+                kw[key] -= dkey
+
+        self._vertical_deriv_factor = M["M"] * N["N"] / (average_particle_mass * AVOGADRO)
+
+        self._d_vertical_deriv_factor = dict(
+            temperature_k = self._vertical_deriv_factor * N["dN_dT"] / N["N"],
+            pressure_pa = self._vertical_deriv_factor * N["dN_dP"] / N["N"],
+            specific_humidity = self._vertical_deriv_factor * M["dM_dsh"] / M["M"],
+            **{key: -self._vertical_deriv_factor * value / average_particle_mass for key, value in d_average_particle_mass.items()}
+        )
+
+        self.number_density = self._mmr * self._vertical_deriv_factor
+
+    @property
+    def mass_mixing_ratio(self):
+        return self._mmr
+
+    @mass_mixing_ratio.setter
+    def mass_mixing_ratio(self, mass_mixing_ratio: np.array):
+        self._mmr = mass_mixing_ratio
+
+    def add_to_atmosphere(self, atmo: Atmosphere):
+        self._update_numberdensity(atmo)
         super().add_to_atmosphere(atmo)

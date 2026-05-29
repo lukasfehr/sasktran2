@@ -118,7 +118,7 @@ def test_scattering_db_wf():
         atmosphere = scen["atmosphere"]
 
         atmosphere["strat_aerosol"] = sk.test_util.scenarios.test_aerosol_constituent(
-            atmosphere.model_geometry.altitudes(), extinction_space=False
+            atmosphere.model_geometry.altitudes(), space="number_density"
         )
 
         engine = sk.Engine(scen["config"], scen["geometry"], scen["viewing_geo"])
@@ -154,7 +154,7 @@ def test_scattering_db_wf_extinction():
         atmosphere = scen["atmosphere"]
 
         atmosphere["strat_aerosol"] = sk.test_util.scenarios.test_aerosol_constituent(
-            atmosphere.model_geometry.altitudes(), extinction_space=True
+            atmosphere.model_geometry.altitudes(), space="extinction"
         )
 
         engine = sk.Engine(scen["config"], scen["geometry"], scen["viewing_geo"])
