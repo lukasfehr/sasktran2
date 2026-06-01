@@ -203,20 +203,42 @@ def test_aerosol_constituent(altitude_grid: np.array, space="extinction"):
 
     if space == "extinction":
         return const
-    elif space == "number_density":
+    if space == "number_density":
         return sk.constituent.NumberDensityScatterer(
             mie, altitude_grid, const.number_density, lognormal_median_radius=radius
         )
-    elif space == "mass_mixing_ratio":
+    if space == "mass_mixing_ratio":
         config = sk.Config()
-        model_geometry = sk.Geometry1D(cos_sza=0., solar_azimuth=0., earth_radius_m=0., altitude_grid_m=altitude_grid)
-        atmosphere = sk.Atmosphere(model_geometry=model_geometry, config=config)
+        model_geometry = sk.Geometry1D(
+            cos_sza=0.0,
+            solar_azimuth=0.0,
+            earth_radius_m=0.0,
+            altitude_grid_m=altitude_grid,
+        )
+        atmosphere = sk.Atmosphere(
+            model_geometry=model_geometry, config=config, numwavel=1
+        )
         sk.climatology.us76.add_us76_standard_atmosphere(atmosphere)
 
+        mie._database = mie._database.rename(lognormal_median_radius="median_radius")
         const0 = sk.constituent.MassMixingRatioScatterer(
-            mie, altitude_grid, np.ones_like(altitude_grid), 1770., sk.mie.distribution.LogNormalDistribution(), median_radius=radius, mode_width=1.6
+            mie,
+            altitude_grid,
+            np.ones_like(altitude_grid),
+            1770.0,
+            sk.mie.distribution.LogNormalDistribution(),
+            median_radius=radius,
+            mode_width=1.6 * np.ones_like(radius),
         )
         const0._update_numberdensity(atmosphere)
         return sk.constituent.MassMixingRatioScatterer(
-            mie, altitude_grid, const.number_density / const0._vertical_deriv_factor, 1770., sk.mie.distribution.LogNormalDistribution(), median_radius=radius, mode_width=1.6
+            mie,
+            altitude_grid,
+            const.number_density / const0._vertical_deriv_factor,
+            1770.0,
+            sk.mie.distribution.LogNormalDistribution(),
+            median_radius=radius,
+            mode_width=1.6 * np.ones_like(radius),
         )
+    msg = f"Unknown space {space}"
+    raise ValueError(msg)

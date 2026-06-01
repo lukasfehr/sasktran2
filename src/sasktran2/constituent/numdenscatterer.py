@@ -9,7 +9,7 @@ from sasktran2.optical.base import OpticalProperty
 from sasktran2.mie.distribution import ParticleSizeDistribution
 from sasktran2.util.interpolation import linear_interpolating_matrix
 from sasktran2.util.state import EquationOfState
-from sasktran2.constants import AVOGADRO 
+from sasktran2.constants import AVOGADRO
 
 from .base import Constituent
 
@@ -177,9 +177,7 @@ class NumberDensityScatterer(Constituent):
             ) * (
                 1 / self._optical_quants.ssa * deriv_mapping.d_ssa
                 + 1 / self._optical_quants.extinction * deriv_mapping.d_extinction
-            )[
-                np.newaxis, :, :
-            ]
+            )[np.newaxis, :, :]
 
             # Then adjust d_ssa
             deriv_mapping.d_ssa[:] *= self._optical_quants.extinction
@@ -289,7 +287,7 @@ class MassMixingRatioScatterer(NumberDensityScatterer):
         altitudes_m: np.array,
         mass_mixing_ratio: np.array,
         density: np.array,
-        distribution: ParticleSizeDistribution, 
+        distribution: ParticleSizeDistribution,
         size_conversion: float = 1e-9,
         out_of_bounds_mode: str = "zero",
         **kwargs,
@@ -325,7 +323,6 @@ class MassMixingRatioScatterer(NumberDensityScatterer):
             optical_property, altitudes_m, None, out_of_bounds_mode, **kwargs
         )
         self._mmr_to_numden_factors = None
-        self._update_numberdensity()
         self._wf_name = "mass_mixing_ratio"
 
         for arg in kwargs:
@@ -337,21 +334,27 @@ class MassMixingRatioScatterer(NumberDensityScatterer):
         # need to interpolate from atmosphere grid to constituent grid
         # small errors if adjacent constituent nodes span atmosphere grid edges
         interp_matrix = linear_interpolating_matrix(
-            atmo.model_geometry.altitudes(),
-            self._altitudes_m,
-            "extend"
+            atmo.model_geometry.altitudes(), self._altitudes_m, "extend"
         )
 
         eos = EquationOfState()
         eos.temperature_k = interp_matrix @ atmo.temperature_k
         eos.pressure_pa = interp_matrix @ atmo.pressure_pa
-        eos.specific_humidity = interp_matrix @ atmo.specific_humidity
-        N = eos.air_numberdensity
-        M = eos.air_molar_mass
+        eos.specific_humidity = (
+            None
+            if atmo.specific_humidity is None
+            else interp_matrix @ atmo.specific_humidity
+        )
+        self._N = N = eos.air_numberdensity
+        self._M = M = eos.air_molar_mass
 
         average_particle_mass = np.zeros_like(self._altitudes_m)
-        d_average_particle_mass = {key: np.zeros_like(average_particle_mass) for key in self._kwargs if key in self._distribution.args()}
-        c = self._density * self._size_conversion**3 * 4. * np.pi / 3.
+        d_average_particle_mass = {
+            key: np.zeros_like(average_particle_mass)
+            for key in self._kwargs
+            if key in self._distribution.args()
+        }
+        c = self._density * self._size_conversion**3 * 4.0 * np.pi / 3.0
         for i in range(len(average_particle_mass)):
             # could cache duplicate values if this is slow
             kw = {key: self._kwargs[key][i] for key in d_average_particle_mass}
@@ -363,16 +366,20 @@ class MassMixingRatioScatterer(NumberDensityScatterer):
                 dkey = max(1e-6, 1e-6 * kw[key])
                 kw[key] += dkey
                 rv = self._distribution.distribution(**kw)
-                d_average_particle_mass[key][i] = (c * rv.moment(order=3) - average_particle_mass[i]) / dkey
+                d_average_particle_mass[key][i] = (
+                    c * rv.moment(order=3) - average_particle_mass[i]
+                ) / dkey
                 kw[key] -= dkey
 
-        self._vertical_deriv_factor = M["M"] * N["N"] / (average_particle_mass * AVOGADRO)
+        self._vertical_deriv_factor = (
+            M["M"] * N["N"] / (average_particle_mass * AVOGADRO)
+        )
 
         self._d_vertical_deriv_factor = dict(
-            temperature_k = self._vertical_deriv_factor * N["dN_dT"] / N["N"],
-            pressure_pa = self._vertical_deriv_factor * N["dN_dP"] / N["N"],
-            specific_humidity = self._vertical_deriv_factor * M["dM_dsh"] / M["M"],
-            **{key: -self._vertical_deriv_factor * value / average_particle_mass for key, value in d_average_particle_mass.items()}
+            **{
+                key: -self._vertical_deriv_factor * value / average_particle_mass
+                for key, value in d_average_particle_mass.items()
+            }
         )
 
         self.number_density = self._mmr * self._vertical_deriv_factor
@@ -388,3 +395,54 @@ class MassMixingRatioScatterer(NumberDensityScatterer):
     def add_to_atmosphere(self, atmo: Atmosphere):
         self._update_numberdensity(atmo)
         super().add_to_atmosphere(atmo)
+
+    def register_derivative(self, atmo, name):
+        const_to_atmo = linear_interpolating_matrix(
+            self._altitudes_m,
+            atmo.model_geometry.altitudes(),
+            self._out_of_bounds_mode.lower(),
+        )
+        atmo_to_const = linear_interpolating_matrix(
+            atmo.model_geometry.altitudes(), self._altitudes_m, "extend"
+        )
+
+        d_extinction = self._optical_quants.extinction
+        d_ssa = (
+            self._optical_quants.extinction
+            * (self._optical_quants.ssa - atmo.storage.ssa)
+            / atmo.storage.total_extinction
+        )
+        d_leg_coeff = self._optical_quants.leg_coeff - atmo.storage.leg_coeff
+        # d_leg_coeff = (self._optical_quants.leg_coeff - atmo.storage.leg_coeff) * self._optical_quants.ssa * self._optical_quants.extinction / (atmo.storage.ssa * atmo.storage.total_extinction)
+
+        deriv_mapping = atmo.storage.get_derivative_mapping("wf_temperature_k")
+        dn_dT = (self.number_density * self._N["dN_dT"] / self._N["N"])[:, np.newaxis]
+        deriv_mapping.d_extinction[:] += const_to_atmo @ (
+            dn_dT * (atmo_to_const @ d_extinction)
+        )
+        deriv_mapping.d_ssa[:] += const_to_atmo @ (dn_dT * (atmo_to_const @ d_ssa))
+        deriv_mapping.d_leg_coeff[:] += const_to_atmo @ (
+            dn_dT[np.newaxis, :, :] * (atmo_to_const @ d_leg_coeff)
+        )
+
+        deriv_mapping = atmo.storage.get_derivative_mapping("wf_pressure_pa")
+        dn_dP = (self.number_density * self._N["dN_dP"] / self._N["N"])[:, np.newaxis]
+        deriv_mapping.d_extinction[:] += const_to_atmo @ (
+            dn_dP * (atmo_to_const @ d_extinction)
+        )
+        deriv_mapping.d_ssa[:] += const_to_atmo @ (dn_dP * (atmo_to_const @ d_ssa))
+        deriv_mapping.d_leg_coeff[:] += const_to_atmo @ (
+            dn_dP[np.newaxis, :, :] * (atmo_to_const @ d_leg_coeff)
+        )
+
+        deriv_mapping = atmo.storage.get_derivative_mapping("wf_specific_humidity")
+        dM_dsh = (self.number_density * self._M["dM_dsh"] / self._M["M"])[:, np.newaxis]
+        deriv_mapping.d_extinction[:] += const_to_atmo @ (
+            dM_dsh * (atmo_to_const @ d_extinction)
+        )
+        deriv_mapping.d_ssa[:] += const_to_atmo @ (dM_dsh * (atmo_to_const @ d_ssa))
+        deriv_mapping.d_leg_coeff[:] += const_to_atmo @ (
+            dM_dsh[np.newaxis, :, :] * (atmo_to_const @ d_leg_coeff)
+        )
+
+        super().register_derivative(atmo, name)

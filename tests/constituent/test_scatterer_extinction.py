@@ -270,6 +270,3 @@ def test_scatterer_numden_wf_interpolated_grid():
             wf_dim="strat_aerosol_altitude",
             decimal=4,
         )
-
-if __name__ == "__main__":
-    test_scatterer_mass_mixing_ratio_wf_native_grid()
