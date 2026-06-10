@@ -141,7 +141,7 @@ def default_pure_scattering_atmosphere(
     return atmo
 
 
-def test_aerosol_constituent(altitude_grid: np.array, space: str="extinction"):
+def test_aerosol_constituent(altitude_grid: np.array, space: str = "extinction"):
     alts = np.arange(0, 40000, 1000.0)
 
     if space.lower() in ["number_density", "extinction"]:
@@ -263,9 +263,16 @@ def test_aerosol_constituent(altitude_grid: np.array, space: str="extinction"):
         mie._database = mie._database.rename(lognormal_median_radius="median_radius")
 
         # radius = np.ones_like(altitude_grid) * radius
-        distribution = sk.mie.distribution.LogNormalDistribution().freeze(mode_width=1.6)
+        distribution = sk.mie.distribution.LogNormalDistribution().freeze(
+            mode_width=1.6
+        )
         return sk.constituent.MassMixingRatioScatterer(
-            mie, altitude_grid, mmr, 1770.0, distribution, median_radius=np.full_like(altitude_grid, 105.)
+            mie,
+            altitude_grid,
+            mmr,
+            1770.0,
+            distribution,
+            median_radius=np.full_like(altitude_grid, 105.0),
         )
 
     msg = f"Unknown aerosol space {space}"

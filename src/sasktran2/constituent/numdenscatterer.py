@@ -5,11 +5,10 @@ from typing import Any
 import numpy as np
 
 from sasktran2.atmosphere import Atmosphere
-from sasktran2.optical.base import OpticalProperty
-from sasktran2.mie.distribution import ParticleSizeDistribution
-from sasktran2.util.interpolation import linear_interpolating_matrix
-from sasktran2.util.state import EquationOfState
 from sasktran2.constants import AVOGADRO
+from sasktran2.mie.distribution import ParticleSizeDistribution
+from sasktran2.optical.base import OpticalProperty
+from sasktran2.util.interpolation import linear_interpolating_matrix
 
 from .base import Constituent
 
@@ -177,7 +176,9 @@ class NumberDensityScatterer(Constituent):
             ) * (
                 1 / self._optical_quants.ssa * deriv_mapping.d_ssa
                 + 1 / self._optical_quants.extinction * deriv_mapping.d_extinction
-            )[np.newaxis, :, :]
+            )[
+                np.newaxis, :, :
+            ]
 
             # Then adjust d_ssa
             deriv_mapping.d_ssa[:] *= self._optical_quants.extinction
