@@ -141,104 +141,132 @@ def default_pure_scattering_atmosphere(
     return atmo
 
 
-def test_aerosol_constituent(altitude_grid: np.array, space="extinction"):
+def test_aerosol_constituent(altitude_grid: np.array, space: str="extinction"):
     alts = np.arange(0, 40000, 1000.0)
 
-    ext = np.array(
-        [
-            0.00000000e00,
-            0.00000000e00,
-            0.00000000e00,
-            0.00000000e00,
-            0.00000000e00,
-            0.00000000e00,
-            0.00000000e00,
-            0.00000000e00,
-            0.00000000e00,
-            0.00000000e00,
-            0.00000000e00,
-            0.00000000e00,
-            0.00000000e00,
-            0.00000000e00,
-            0.00000000e00,
-            2.88027019e-07,
-            3.69604997e-07,
-            3.10548639e-07,
-            2.75319733e-07,
-            2.43405259e-07,
-            2.64027971e-07,
-            2.57261097e-07,
-            2.50073674e-07,
-            2.45212374e-07,
-            2.09064034e-07,
-            1.71399035e-07,
-            1.57256087e-07,
-            1.51544489e-07,
-            1.49381653e-07,
-            1.48309802e-07,
-            1.28552798e-07,
-            1.03291371e-07,
-            8.03122894e-08,
-            6.15167010e-08,
-            3.81730206e-08,
-            2.27081327e-08,
-            7.19716081e-09,
-            7.79190668e-09,
-            6.16738043e-09,
-            4.63396327e-09,
-        ]
-    )
+    if space.lower() in ["number_density", "extinction"]:
+        ext = np.array(
+            [
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                2.88027019e-07,
+                3.69604997e-07,
+                3.10548639e-07,
+                2.75319733e-07,
+                2.43405259e-07,
+                2.64027971e-07,
+                2.57261097e-07,
+                2.50073674e-07,
+                2.45212374e-07,
+                2.09064034e-07,
+                1.71399035e-07,
+                1.57256087e-07,
+                1.51544489e-07,
+                1.49381653e-07,
+                1.48309802e-07,
+                1.28552798e-07,
+                1.03291371e-07,
+                8.03122894e-08,
+                6.15167010e-08,
+                3.81730206e-08,
+                2.27081327e-08,
+                7.19716081e-09,
+                7.79190668e-09,
+                6.16738043e-09,
+                4.63396327e-09,
+            ]
+        )
 
-    ext = np.interp(altitude_grid, alts, ext)
+        ext = np.interp(altitude_grid, alts, ext)
+        ext_wavel = 525
 
-    ext_wavel = 525
+        mie = sk.optical.database.OpticalDatabaseGenericScatterer(
+            sk.database.StandardDatabase().path("cross_sections/mie/sulfate_test.nc")
+        )
+        radius = np.ones_like(altitude_grid) * 105
+        const = sk.constituent.ExtinctionScatterer(
+            mie, altitude_grid, ext, ext_wavel, lognormal_median_radius=radius
+        )
 
-    mie = sk.optical.database.OpticalDatabaseGenericScatterer(
-        sk.database.StandardDatabase().path("cross_sections/mie/sulfate_test.nc")
-    )
-    radius = np.ones_like(altitude_grid) * 105
-    const = sk.constituent.ExtinctionScatterer(
-        mie, altitude_grid, ext, ext_wavel, lognormal_median_radius=radius
-    )
+        if space == "extinction":
+            return const
 
-    if space == "extinction":
-        return const
-    if space == "number_density":
         return sk.constituent.NumberDensityScatterer(
             mie, altitude_grid, const.number_density, lognormal_median_radius=radius
         )
-    if space == "mass_mixing_ratio":
-        config = sk.Config()
-        model_geometry = sk.Geometry1D(
-            cos_sza=0.0,
-            solar_azimuth=0.0,
-            earth_radius_m=0.0,
-            altitude_grid_m=altitude_grid,
-        )
-        atmosphere = sk.Atmosphere(
-            model_geometry=model_geometry, config=config, numwavel=1
-        )
-        sk.climatology.us76.add_us76_standard_atmosphere(atmosphere)
 
+    if space == "mass_mixing_ratio":
+        mmr = np.array(
+            [
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                0.00000000e00,
+                4.24714040e-10,
+                6.37530157e-10,
+                6.26602380e-10,
+                6.49829256e-10,
+                6.72034221e-10,
+                8.52728699e-10,
+                9.74429623e-10,
+                1.11083857e-09,
+                1.27738920e-09,
+                1.27717210e-09,
+                1.22788906e-09,
+                1.31629609e-09,
+                1.48208467e-09,
+                1.70690093e-09,
+                1.97993356e-09,
+                2.00504259e-09,
+                1.87790822e-09,
+                1.70181939e-09,
+                1.51914592e-09,
+                1.09848154e-09,
+                7.61382932e-10,
+                2.81141513e-10,
+                3.54574098e-10,
+                3.26905149e-10,
+                2.86081938e-10,
+            ]
+        )
+
+        mmr = np.interp(altitude_grid, alts, mmr)
+
+        mie = sk.optical.database.OpticalDatabaseGenericScatterer(
+            sk.database.StandardDatabase().path("cross_sections/mie/sulfate_test.nc")
+        )
+        # optical property kwargs needs to match distribution kwargs
         mie._database = mie._database.rename(lognormal_median_radius="median_radius")
-        const0 = sk.constituent.MassMixingRatioScatterer(
-            mie,
-            altitude_grid,
-            np.ones_like(altitude_grid),
-            1770.0,
-            sk.mie.distribution.LogNormalDistribution(),
-            median_radius=radius,
-            mode_width=1.6 * np.ones_like(radius),
-        )
-        const0._update_numberdensity(atmosphere)
+
+        # radius = np.ones_like(altitude_grid) * radius
+        distribution = sk.mie.distribution.LogNormalDistribution().freeze(mode_width=1.6)
         return sk.constituent.MassMixingRatioScatterer(
-            mie,
-            altitude_grid,
-            const.number_density / const0._vertical_deriv_factor,
-            1770.0,
-            sk.mie.distribution.LogNormalDistribution(),
-            median_radius=radius,
-            mode_width=1.6 * np.ones_like(radius),
+            mie, altitude_grid, mmr, 1770.0, distribution, median_radius=np.full_like(altitude_grid, 105.)
         )
-    msg = f"Unknown space {space}"
+
+    msg = f"Unknown aerosol space {space}"
     raise ValueError(msg)

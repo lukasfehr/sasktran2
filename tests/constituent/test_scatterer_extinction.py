@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+
 # import pytest
 import sasktran2 as sk
 
@@ -120,43 +121,6 @@ def test_scatterer_extinction_wf_native_grid():
         )
 
 
-def test_scatterer_mass_mixing_ratio_wf_native_grid():
-    """
-    Tests the derivatives for a scatterer on the native grid
-    """
-
-    scens = _test_scenarios()
-
-    for scen in scens:
-        altitude_grid = scen["atmosphere"].model_geometry.altitudes()
-        atmosphere = scen["atmosphere"]
-
-        atmosphere["ozone"] = sk.constituent.VMRAltitudeAbsorber(
-            sk.optical.O3DBM(), altitude_grid, np.ones_like(altitude_grid) * 1e-6
-        )
-
-        atmosphere["strat_aerosol"] = sk.test_util.scenarios.test_aerosol_constituent(
-            altitude_grid, "mass_mixing_ratio"
-        )
-
-        engine = sk.Engine(scen["config"], scen["geometry"], scen["viewing_geo"])
-
-        radiance = sk.test_util.wf.numeric_wf(
-            atmosphere["strat_aerosol"].mass_mixing_ratio,
-            0.0001,
-            engine,
-            atmosphere,
-            "wf_strat_aerosol_mass_mixing_ratio",
-        )
-
-        sk.test_util.wf.validate_wf(
-            radiance["wf_strat_aerosol_mass_mixing_ratio"],
-            radiance["wf_strat_aerosol_mass_mixing_ratio_numeric"],
-            wf_dim="strat_aerosol_altitude",
-            decimal=5,
-        )
-
-
 def test_scatterer_radius_wf_native_grid():
     """
     Tests the derivatives for a scatterer on the native grid
@@ -269,4 +233,177 @@ def test_scatterer_numden_wf_interpolated_grid():
             radiance["wf_strat_aerosol_number_density_numeric"],
             wf_dim="strat_aerosol_altitude",
             decimal=4,
+        )
+
+
+def test_mmr_scatterer_altitude_construction():
+    """
+    Test that the ExtinctionScatterer class can be constructed and basic functionality works
+    """
+    alts = np.arange(0, 100001, 1000)
+    particle_density = 1770.0  # kg/m
+
+    mmr_profile = np.ones_like(alts) * 1e-9
+
+    mie = sk.optical.database.OpticalDatabaseGenericScatterer(
+        sk.appconfig.database_root().joinpath("cross_sections/mie/sulfate_test.nc")
+    )
+    mie._database.rename(lognormal_median_radius="median_radius")
+    radius = np.ones_like(alts) * 105
+    distribution = sk.mie.distribution.LogNormalDistribution().freeze(mode_width=1.6)
+    const = sk.constituent.MassMixingRatioScatterer(
+        mie, alts, mmr_profile, particle_density, distribution, median_radius=radius
+    )
+
+    assert len(const.mass_mixing_ratio) == len(alts)
+
+
+def test_mmr_scatterer_mmr_wf_native_grid():
+    """
+    Tests the derivatives for a scatterer on the native grid
+    """
+
+    scens = _test_scenarios()
+
+    for scen in scens:
+        altitude_grid = scen["atmosphere"].model_geometry.altitudes()
+        atmosphere = scen["atmosphere"]
+
+        atmosphere["ozone"] = sk.constituent.VMRAltitudeAbsorber(
+            sk.optical.O3DBM(), altitude_grid, np.ones_like(altitude_grid) * 1e-6
+        )
+
+        atmosphere["strat_aerosol"] = sk.test_util.scenarios.test_aerosol_constituent(
+            altitude_grid, "mass_mixing_ratio"
+        )
+
+        engine = sk.Engine(scen["config"], scen["geometry"], scen["viewing_geo"])
+
+        radiance = sk.test_util.wf.numeric_wf(
+            atmosphere["strat_aerosol"].mass_mixing_ratio,
+            0.0001,
+            engine,
+            atmosphere,
+            "wf_strat_aerosol_mass_mixing_ratio",
+        )
+
+        sk.test_util.wf.validate_wf(
+            radiance["wf_strat_aerosol_mass_mixing_ratio"],
+            radiance["wf_strat_aerosol_mass_mixing_ratio_numeric"],
+            wf_dim="strat_aerosol_altitude",
+            decimal=5,
+        )
+
+
+def test_mmr_scatterer_temperature_wf_native_grid():
+    """
+    Tests the derivatives for a scatterer on the native grid
+    """
+
+    scens = _test_scenarios()
+
+    for scen in scens:
+        altitude_grid = scen["atmosphere"].model_geometry.altitudes()
+        atmosphere = scen["atmosphere"]
+
+        atmosphere["ozone"] = sk.constituent.VMRAltitudeAbsorber(
+            sk.optical.O3DBM(), altitude_grid, np.ones_like(altitude_grid) * 1e-6
+        )
+
+        atmosphere["strat_aerosol"] = sk.test_util.scenarios.test_aerosol_constituent(
+            altitude_grid, "mass_mixing_ratio"
+        )
+
+        engine = sk.Engine(scen["config"], scen["geometry"], scen["viewing_geo"])
+
+        radiance = sk.test_util.wf.numeric_wf(
+            atmosphere.temperature_k,
+            0.00001,
+            engine,
+            atmosphere,
+            "wf_temperature_k",
+        )
+
+        sk.test_util.wf.validate_wf(
+            radiance["wf_temperature_k"],
+            radiance["wf_temperature_k_numeric"],
+            wf_dim="altitude",
+            decimal=5,
+        )
+
+
+def test_mmr_scatterer_radius_wf_native_grid():
+    """
+    Tests the derivatives for a scatterer on the native grid
+    """
+
+    scens = _test_scenarios()
+
+    for scen in scens:
+        altitude_grid = scen["atmosphere"].model_geometry.altitudes()
+        atmosphere = scen["atmosphere"]
+
+        atmosphere["ozone"] = sk.constituent.VMRAltitudeAbsorber(
+            sk.optical.O3DBM(), altitude_grid, np.ones_like(altitude_grid) * 1e-6
+        )
+
+        atmosphere["strat_aerosol"] = sk.test_util.scenarios.test_aerosol_constituent(
+            altitude_grid, "mass_mixing_ratio"
+        )
+
+        engine = sk.Engine(scen["config"], scen["geometry"], scen["viewing_geo"])
+
+        radiance = sk.test_util.wf.numeric_wf(
+            atmosphere["strat_aerosol"].median_radius,
+            0.0001,
+            engine,
+            atmosphere,
+            "wf_strat_aerosol_median_radius",
+        )
+
+        # this is sensitive to choice of scat_factor
+        # I could get it to decimal=3 by reducing norm_factor by a factor of 10
+        sk.test_util.wf.validate_wf(
+            radiance["wf_strat_aerosol_median_radius"],
+            radiance["wf_strat_aerosol_median_radius_numeric"],
+            wf_dim="strat_aerosol_altitude",
+            decimal=3,
+        )
+
+
+def test_mmr_scatterer_mmr_wf_interpolated_grid():
+    """
+    Tests the derivatives for a number density scatterer on an interpolated grid
+    """
+
+    scens = _test_scenarios()
+    new_altitudes = np.array([0, 10000, 30000, 70000])
+
+    for scen in scens:
+        altitude_grid = scen["atmosphere"].model_geometry.altitudes()
+        atmosphere = scen["atmosphere"]
+
+        atmosphere["ozone"] = sk.constituent.VMRAltitudeAbsorber(
+            sk.optical.O3DBM(), altitude_grid, np.ones_like(altitude_grid) * 1e-6
+        )
+
+        atmosphere["strat_aerosol"] = sk.test_util.scenarios.test_aerosol_constituent(
+            new_altitudes, "mass_mixing_ratio"
+        )
+
+        engine = sk.Engine(scen["config"], scen["geometry"], scen["viewing_geo"])
+
+        radiance = sk.test_util.wf.numeric_wf(
+            atmosphere["strat_aerosol"].mass_mixing_ratio,
+            0.0001,
+            engine,
+            atmosphere,
+            "wf_strat_aerosol_mass_mixing_ratio",
+        )
+
+        sk.test_util.wf.validate_wf(
+            radiance["wf_strat_aerosol_mass_mixing_ratio"],
+            radiance["wf_strat_aerosol_mass_mixing_ratio_numeric"],
+            wf_dim="strat_aerosol_altitude",
+            decimal=5,
         )
