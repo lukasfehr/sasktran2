@@ -12,9 +12,9 @@ mod geodetic;
 mod geometry;
 mod optical;
 mod output;
+mod photchem;
 mod pyrebasis;
 mod viewing_geometry;
-mod photchem;
 
 use pyo3::prelude::*;
 
@@ -24,6 +24,7 @@ fn _core_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<constituent::emission::PyThermalEmission>()?;
     m.add_class::<constituent::rayleigh::PyRayleigh>()?;
     m.add_class::<constituent::vmr_alt_absorber::PyVMRAltitudeAbsorber>()?;
+    m.add_class::<constituent::number_density_scatterer::PyNumberDensityScatterer>()?;
     m.add_class::<constituent::manual::PyManual>()?;
     m.add_class::<constituent::volume_emission_rate::PyMonochromaticVolumeEmissionRate>()?;
 
@@ -34,6 +35,7 @@ fn _core_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<optical::scat_dbase::PyScatteringDatabaseDim1>()?;
     m.add_class::<optical::scat_dbase::PyScatteringDatabaseDim2>()?;
     m.add_class::<optical::scat_dbase::PyScatteringDatabaseDim3>()?;
+    m.add_class::<optical::scat_dbase::PyScatteringDatabaseDim4>()?;
 
     // Optical properties
     m.add_class::<optical::line_absorber::PyLineAbsorber>()?;
