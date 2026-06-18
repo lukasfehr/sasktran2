@@ -294,7 +294,7 @@ class MassMixingRatioScatterer(Constituent):
         **kwargs,
     ) -> None:
         """
-        A scattering constituent that is defined by a number density on an altitude grid and an optical property
+        A scattering constituent that is defined by a mass mixing ratio on an altitude grid and an optical property
 
         Parameters
         ----------
@@ -366,7 +366,7 @@ class MassMixingRatioScatterer(Constituent):
                     dv_dx[key][i] = (c * rv.moment(order=3) - v[i]) / dkey
         else:
             rv = self._distribution.distribution()
-            v = {"V": c * rv.moment(order=3)}
+            v = c * rv.moment(order=3)
             dv_dx = {}
         return v, dv_dx
 
